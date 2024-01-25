@@ -1,20 +1,69 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: webapp
+  name: devwebapp
   namespace: dev
+  labels:
+    app: webapp
+    environment: development
+annotations:
+  deployment.kubernetes.io/revision: "1"
 spec:
-  replicas: 2
+  replicas: 3
   selector:
     matchLabels:
       app: webapp
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
   template:
     metadata:
       labels:
         app: webapp
     spec:
       containers:
-      - name: webapp
-        image: webappimage
+      - name: webappcontainer
+        image: dockerrepo/devwebapp:latest
+        imagePullPolicy: Always
         ports:
-        - containerPort: 80
+        - containerPort: 8080
+        env:
+        - name: ENVIRONMENT
+          value: development
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: devdbconfig
+              key: database_host
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: devdbsecret
+              key: database_password
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "250m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          timeoutSeconds: 1
+      volumes:
+      - name: appconfig
+        configMap:
+          name: devappconfig
+  minReadySeconds: 5
+  revisionHistoryLimit: 10
